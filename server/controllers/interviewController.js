@@ -34,9 +34,36 @@ async function startSession(req, res) {
     const { role, difficulty } = startSchema.parse(req.body);
     const userId = req.user.id;
 
-    // Generate questions via AI
-    const aiResult = await ai.generateQuestions(role, difficulty);
-    const questions = aiResult.questions || [];
+    // Check global database cache first
+    let questions = [];
+    try {
+        const cacheResult = await query(
+            'SELECT questions FROM question_bank WHERE role = $1 AND difficulty = $2',
+            [role, difficulty]
+        );
+        if (cacheResult.rows.length > 0) {
+            questions = cacheResult.rows[0].questions;
+        }
+    } catch (err) {
+        console.error('Cache read error:', err.message);
+    }
+
+    // If cache miss, generate via AI and store
+    if (!questions || questions.length === 0) {
+        const aiResult = await ai.generateQuestions(role, difficulty);
+        questions = aiResult.questions || [];
+
+        if (questions.length > 0) {
+            try {
+                await query(
+                    'INSERT INTO question_bank (role, difficulty, questions) VALUES ($1, $2, $3) ON CONFLICT (role, difficulty) DO NOTHING',
+                    [role, difficulty, JSON.stringify(questions)]
+                );
+            } catch (err) {
+                console.error('Cache write error:', err.message);
+            }
+        }
+    }
 
     // Create session in DB
     const sessionResult = await query(
@@ -116,8 +143,37 @@ async function generateFollowUp(req, res) {
 async function nextQuestion(req, res) {
     const { sessionId, role, difficulty, prevQuestion, prevAnswer, score } = nextSchema.parse(req.body);
     const nextDiff = getNextDifficulty(score, difficulty);
-    const result = await ai.generateNextQuestion(role, nextDiff, prevQuestion, prevAnswer, score);
-    res.json({ question: result.question, newDifficulty: nextDiff });
+    
+    // Check cached question bank first to avoid AI call
+    let questionPool = [];
+    try {
+        const cacheResult = await query(
+            'SELECT questions FROM question_bank WHERE role = $1 AND difficulty = $2',
+            [role, nextDiff]
+        );
+        if (cacheResult.rows.length > 0) {
+            questionPool = cacheResult.rows[0].questions;
+        }
+    } catch (err) {
+        console.error('Cache read error in nextQuestion:', err.message);
+    }
+
+    let nextQuestionText = null;
+    if (questionPool && questionPool.length > 0) {
+        // Find a question we haven't asked right before
+        const validQuestions = questionPool.filter(q => q.toLowerCase().trim() !== prevQuestion.toLowerCase().trim());
+        if (validQuestions.length > 0) {
+            nextQuestionText = validQuestions[Math.floor(Math.random() * validQuestions.length)];
+        }
+    }
+
+    // Fallback to AI if cache misses or no unique questions remain
+    if (!nextQuestionText) {
+        const result = await ai.generateNextQuestion(role, nextDiff, prevQuestion, prevAnswer, score);
+        nextQuestionText = result.question;
+    }
+
+    res.json({ question: nextQuestionText, newDifficulty: nextDiff });
 }
 
 async function finishSession(req, res) {
