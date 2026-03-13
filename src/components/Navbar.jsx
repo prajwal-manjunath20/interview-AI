@@ -42,6 +42,7 @@ export default function Navbar() {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 {navLink('/', 'Practice')}
+                {navLink('/courses', 'Courses')}
                 {navLink('/dashboard', 'Dashboard')}
             </div>
 

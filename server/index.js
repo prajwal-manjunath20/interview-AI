@@ -11,6 +11,7 @@ const errorHandler = require('./middleware/errorHandler');
 const authRoutes = require('./routes/auth');
 const interviewRoutes = require('./routes/interview');
 const analyticsRoutes = require('./routes/analytics');
+const courseRoutes = require('./routes/courses');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -32,6 +33,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/interview', interviewRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/courses', courseRoutes);
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Route not found' }));

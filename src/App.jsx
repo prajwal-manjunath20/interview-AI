@@ -8,6 +8,8 @@ import InterviewPage from './pages/InterviewPage';
 import FeedbackPage from './pages/FeedbackPage';
 import SummaryPage from './pages/SummaryPage';
 import DashboardPage from './pages/DashboardPage';
+import CoursesPage from './pages/CoursesPage';
+import CoursePlayerPage from './pages/CoursePlayerPage';
 
 export default function App() {
   return (
@@ -22,6 +24,8 @@ export default function App() {
             <Route path="/feedback" element={<FeedbackPage />} />
             <Route path="/summary" element={<SummaryPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/courses" element={<CoursesPage />} />
+            <Route path="/course/:id" element={<CoursePlayerPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

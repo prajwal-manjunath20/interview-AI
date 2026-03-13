@@ -1,8 +1,9 @@
-const axios = require('axios');
+const axios = require("axios")
 
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const HF_MODEL =
+  "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 // ─── Fallback question bank ────────────────────────────────────────────────
 const FALLBACK_QUESTIONS = {
@@ -472,72 +473,91 @@ function analyzeConfidenceContent(answer) {
     return { confidence_score, issues, suggestions };
 }
 
-// ─── Gemini API call with retry + fallback ─────────────────────────────────
+// ─── HuggingFace AI call with retry + fallback ─────────────────────────────
 
-let geminiRateLimited = false;
+let aiRateLimited = false
 
-async function callGemini(prompt, retries = 3) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || geminiRateLimited) return null;
+async function callAI(prompt, retries = 3) {
+  const apiKey = process.env.HF_API_KEY
 
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            const response = await axios.post(
-                `${GEMINI_URL}?key=${apiKey}`,
-                {
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.4, maxOutputTokens: 1500 },
-                },
-                { timeout: 30000 }
-            );
-            geminiRateLimited = false;
-            let text = response.data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-            const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-            if (!jsonMatch) {
-                console.error('[Gemini Raw Response]', text.substring(0, 300));
-                return null;
-            }
-            return JSON.parse(jsonMatch[0]);
-        } catch (err) {
-            const status = err.response?.status;
-            const data = err.response?.data;
-            if (data) console.error(`[Gemini Error attempt ${attempt}]`, JSON.stringify(data).substring(0, 300));
+  if (!apiKey || aiRateLimited) return null
 
-            if (status === 429) {
-                if (attempt < retries) {
-                    const delay = Math.pow(2, attempt) * 1500;
-                    console.warn(`[Gemini] Rate limited. Retrying in ${delay}ms...`);
-                    await sleep(delay);
-                    continue;
-                }
-                console.warn('[Gemini] Quota exhausted. Switching to local analysis.');
-                geminiRateLimited = true;
-                return null;
-            }
-            console.error('[Gemini] Error:', err.message);
-            return null;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await axios.post(
+        HF_MODEL,
+        {
+          inputs: prompt,
+          parameters: {
+            temperature: 0.4,
+            max_new_tokens: 1000
+          }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          timeout: 60000
         }
+      )
+
+      let text = response.data?.[0]?.generated_text || ""
+
+      text = text
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```\s*$/, "")
+        .trim()
+
+      const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/)
+
+      if (!jsonMatch) {
+        console.error("[AI Raw Response]", text.substring(0, 300))
+        return null
+      }
+
+      return JSON.parse(jsonMatch[0])
+    } catch (err) {
+      const status = err.response?.status
+
+      if (status === 503 || status === 429) {
+        if (attempt < retries) {
+          const delay = Math.pow(2, attempt) * 2000
+          console.warn(`[AI] Rate limited. Retrying in ${delay}ms`)
+          await sleep(delay)
+          continue
+        }
+
+        console.warn("[AI] API unavailable, switching to fallback mode")
+        aiRateLimited = true
+        return null
+      }
+
+      console.error("[AI Error]", err.message)
+      return null
     }
-    return null;
+  }
+
+  return null
 }
 
 // ─── Public service functions ─────────────────────────────────────────────
 
 async function generateQuestions(role, difficulty) {
-    const prompt = `You are a senior technical interviewer at a top tech company. Generate exactly 5 interview questions for a ${role} position at ${difficulty} level.
+    const prompt = `You are a strict, senior technical interviewer at a top tech company. Generate exactly 5 interview questions specifically and exclusively for a "${role}" position at the "${difficulty}" level.
+
+CRITICAL INSTRUCTION: All generated questions MUST be highly relevant to the specific domain, tools, and daily tasks of a "${role}". Do NOT ask generic programming or generic behavioral questions unless they are framed specifically around scenarios a ${role} would realistically face.
 
 Requirements:
-- 3 technical questions specific to ${role} skills and real-world problems
-- 2 behavioral questions using "Tell me about a time..." format
-- Questions should be challenging but fair for ${difficulty} level
-- Make questions open-ended, not yes/no
-- Focus on what great ${role}s actually do on the job
+- 3 deep technical questions highly specific to ${role} technologies, system design, or domain-specific problem solving.
+- 2 behavioral questions using "Tell me about a time..." format, framed entirely around situations a ${role} would encounter.
+- Questions should be challenging but fair for ${difficulty} level.
+- Make questions open-ended and scenario-based.
 
 Return ONLY this exact JSON, no markdown, no explanation:
 {"questions": ["question1","question2","question3","question4","question5"]}`;
 
-    const result = await callGemini(prompt);
+    const result = await callAI(prompt);
     if (result && Array.isArray(result.questions) && result.questions.length > 0) return result;
 
     console.log('[AI Fallback] Using curated questions for', role, difficulty);
@@ -545,100 +565,25 @@ Return ONLY this exact JSON, no markdown, no explanation:
 }
 
 async function evaluateAnswer(question, answer) {
-    const prompt = `You are a senior technical interviewer. Evaluate this interview answer with precise, differentiated scores.
-
-QUESTION: ${question}
-
-ANSWER: ${answer}
-
-Scoring rubric (be strict and accurate, DO NOT give everything a 7):
-- relevance (0-10): Does the answer directly address what was asked? Does it cover all parts of the question?
-- clarity (0-10): Is it easy to follow? Good structure, no rambling, logical flow?
-- depth (0-10): Specific examples, technologies named, reasoning explained, not surface-level?
-- structure (0-10): Clear opening/body/closing, organized points, or rambling stream of consciousness?
-- confidence (0-10): Active first-person language, direct statements, no excessive hedging?
-
-feedback: 2-3 sentences. First acknowledge one specific strength (quote from their answer). Then give the single most impactful improvement they can make.
-
-Return ONLY this JSON, no markdown:
-{"relevance":0,"clarity":0,"depth":0,"structure":0,"confidence":0,"feedback":"..."}`;
-
-    const result = await callGemini(prompt);
-    if (result && typeof result.relevance === 'number') return result;
-
-    console.log('[AI Fallback] Using local evaluation');
-    const analysis = analyzeAnswerContent(question, answer);
-    return { ...analysis, _fallback: true };
+    // Hybrid Architecture: Evaluation is handled entirely by the robust Local Evaluation Engine.
+    // This reduces AI dependency, lowers latency, and ensures consistent grading logic.
+    return analyzeAnswerContent(question, answer);
 }
 
 async function analyzeSTAR(question, answer) {
-    const prompt = `Analyze this behavioral interview answer for STAR framework completeness.
-
-QUESTION: ${question}
-ANSWER: ${answer}
-
-Score each element 0-5 strictly:
-- situation (0-5): Is there clear context — when/where/what was happening? 0=completely absent, 5=vivid and specific
-- task (0-5): Is the person's specific responsibility clear? 0=unclear, 5=crystal clear ownership
-- action (0-5): Are the steps THEY took described in detail? 0=vague/team-focused, 5=specific first-person actions
-- result (0-5): Is there a measurable outcome? 0=no result mentioned, 5=quantified impact
-
-tips: One specific, actionable sentence telling them exactly what to add to improve the weakest element.
-
-Return ONLY this JSON, no markdown:
-{"situation":0,"task":0,"action":0,"result":0,"tips":"..."}`;
-
-    const result = await callGemini(prompt);
-    if (result && typeof result.situation === 'number') return result;
-
-    console.log('[AI Fallback] Using local STAR analysis');
-    return { ...analyzeSTARContent(question, answer), _fallback: true };
+    // Hybrid Architecture: STAR component breakdown is parsed purely via the
+    // Local Evaluation Engine utilizing regex temporal and role markers.
+    return analyzeSTARContent(question, answer);
 }
 
 async function analyzeConfidence(answer) {
-    const prompt = `Analyze the communication quality and confidence in this interview answer.
-
-ANSWER: ${answer}
-
-Detect and flag:
-- Filler words: um, uh, like, you know, sort of, kind of, basically, literally
-- Hedging language: I think, maybe, perhaps, I'm not sure, might, could be, I guess
-- Vague language: something like, more or less, kind of thing
-- Lack of ownership: excessive "we" when "I" should be used
-- Missing metrics: impact claimed but not quantified
-
-confidence_score (1-10): 10 = direct, assertive, evidence-based. 1 = full of fillers and hedges.
-issues: array of 1-3 specific issues found (or "No major issues" if clean)
-suggestions: array of 1-3 actionable, concrete improvements
-
-Return ONLY this JSON, no markdown:
-{"confidence_score":0,"issues":["..."],"suggestions":["..."]}`;
-
-    const result = await callGemini(prompt);
-    if (result && typeof result.confidence_score === 'number') return result;
-
-    console.log('[AI Fallback] Using local confidence analysis');
-    return { ...analyzeConfidenceContent(answer), _fallback: true };
+    // Hybrid Architecture: Confidence is scored logically via the Local Engine
+    // by evaluating filler words, hedging phrases, assertive counts, and metrics.
+    return analyzeConfidenceContent(answer);
 }
 
 async function generateFollowUp(question, answer) {
-    const prompt = `You are a senior interviewer pressing for more depth.
-
-ORIGINAL QUESTION: ${question}
-CANDIDATE'S ANSWER: ${answer}
-
-The answer lacked depth. Generate ONE sharp follow-up question that:
-- Probes a specific weakness or gap in their answer
-- Asks for implementation details, trade-offs, or failure modes they didn't mention
-- Cannot be answered with a simple yes/no
-
-Return ONLY this JSON, no markdown:
-{"follow_up":"..."}`;
-
-    const result = await callGemini(prompt);
-    if (result && result.follow_up) return result;
-
-    // Contextual fallback follow-ups based on question content
+    // Contextual deterministic follow-ups based on question content
     const q = question.toLowerCase();
     const followUps = q.includes('design') || q.includes('architect')
         ? ["How would you handle a 10x spike in traffic, and what would be the first component to fail under that load?",
@@ -652,20 +597,22 @@ Return ONLY this JSON, no markdown:
                 "What trade-offs did you make, and what did you have to sacrifice to get there?",
                 "What would break first if the requirements doubled in scale?"];
 
-    return { follow_up: followUps[Math.floor(Math.random() * followUps.length)], _fallback: true };
+    return { follow_up: followUps[Math.floor(Math.random() * followUps.length)] };
 }
 
 async function generateNextQuestion(role, difficulty, prevQuestion, prevAnswer, score) {
-    const prompt = `You are conducting a live adaptive interview for a ${role} position.
+    const prompt = `You are conducting a live, role-specific adaptive interview for a "${role}" position.
+
+CRITICAL INSTRUCTION: The next question MUST be highly relevant to the specific domain and daily tasks of a "${role}". Do NOT ask generic questions.
 
 PREVIOUS QUESTION: ${prevQuestion}
 CANDIDATE'S ANSWER: ${prevAnswer}
 SCORE: ${score}/10
 
 Rules for next question:
-- Score > 7: Go harder — deeper technical follow-up or a new harder topic
-- Score 4-7: Same level — different topic area not yet covered
-- Score < 4: Ease up — simpler question on a related topic, build confidence
+- Score > 7: Go harder — deeper technical follow-up or a new harder topic specifically related to being a ${role}.
+- Score 4-7: Same level — different technical or behavioral topic area intrinsic to the ${role} role.
+- Score < 4: Ease up — simpler core concept question for a ${role}.
 
 Do NOT repeat the same topic as the previous question.
 Make it a fresh, standalone question (not "following up on...").
@@ -673,13 +620,170 @@ Make it a fresh, standalone question (not "following up on...").
 Return ONLY this JSON, no markdown:
 {"question":"..."}`;
 
-    const result = await callGemini(prompt);
+    const result = await callAI(prompt);
     if (result && result.question) return result;
 
     const effectiveDiff = score > 7 ? 'Senior' : score < 4 ? 'Junior' : difficulty;
     const pool = getFallbackQuestions(role, effectiveDiff);
     const question = pool[Math.floor(Math.random() * pool.length)];
     return { question, _fallback: true };
+}
+
+// ─── Course, MCQ, and Coding Challenge Generation ─────────────────────────
+
+async function generateCourse(topic, difficulty) {
+    const prompt = `You are an expert technical curriculum designer. The user wants to generate a course on the topic "${topic}" at a "${difficulty}" level.
+    
+CRITICAL VALIDATION: First, evaluate if "${topic}" is a valid educational, technical, or professional topic. If the topic is complete gibberish (e.g., "adjasdl"), a greeting ("hello"), or inappropriate/completely irrelevant for a learning platform, you MUST reject it.
+If rejecting, return exactly this JSON:
+{"error": "Invalid topic. Please provide a relevant technical or professional subject."}
+
+If the topic IS valid, create a course broken down into 3-5 modules (materials). For each module, provide a title and detailed markdown content (at least 300 words per module explaining the concepts clearly with examples).
+
+Return ONLY this exact JSON, no markdown, no explanation:
+{
+  "title": "Course Title",
+  "materials": [
+    {
+      "title": "Module 1 Title",
+      "content_markdown": "Detailed markdown content..."
+    }
+  ]
+}`;
+
+    const result = await callAI(prompt);
+    if (result && result.materials && result.materials.length > 0) return result;
+
+    return {
+        _fallback: true,
+        title: `${topic} Course`,
+        materials: [
+            {
+                title: "Introduction",
+                content_markdown: "This is a fallback generated course material due to AI unavailability. Please try again later."
+            }
+        ]
+    };
+}
+
+async function generateMCQs(courseTitle, materialsSummary) {
+    const prompt = `You are an expert technical assessor. Based on the following course, generate exactly 5 multiple-choice questions (MCQs) that test the user's understanding.
+
+Course Title: ${courseTitle}
+Course Materials Summary (or topics covered): ${materialsSummary}
+
+Requirements:
+- Each question must have exactly 4 options.
+- Only one option should be correct.
+- Provide a brief explanation for why the correct answer is correct.
+
+Return ONLY this exact JSON, no markdown, no explanation:
+{
+  "mcqs": [
+    {
+      "question": "What is...?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": "Option A",
+      "explanation": "Option A is correct because..."
+    }
+  ]
+}`;
+
+    const result = await callAI(prompt);
+    if (result && result.mcqs && result.mcqs.length === 5) return result;
+
+    return {
+        _fallback: true,
+        mcqs: []
+    };
+}
+
+async function generateCodingChallenge(topic, language) {
+    const prompt = `You are an expert competitive programming platform creator (like HackerRank). Generate a coding challenge for the topic "${topic}" to be solved in "${language}".
+
+Requirements:
+- A clear 'title'.
+- A 'problem_statement' describing the task, input format, output format, and constraints in markdown.
+- 'starter_code' in the requested language with a function signature ready to be completed.
+- 3-5 'test_cases' including hidden edge cases. Each test case should have 'input' and 'expected_output' as strings.
+
+Return ONLY this exact JSON, no markdown, no explanation:
+{
+  "title": "Problem Title",
+  "problem_statement": "Description...",
+  "language": "${language}",
+  "starter_code": "def solve(x):\\n    pass",
+  "test_cases": [
+    {
+      "input": "1 2",
+      "expected_output": "3"
+    }
+  ]
+}`;
+
+    const result = await callAI(prompt, 2);
+    if (result && result.title && result.starter_code) return result;
+
+    return {
+        _fallback: true,
+        title: "System Design Challenge (Fallback)",
+        problem_statement: "### AI Service Unavailable\n\nOur AI evaluation servers are currently at capacity or experiencing an API key issue.\n\nWhile we reconnect, try this fallback exercise:\n\n**Task**: Write a function that prints 'Hello World' to the console, or simply return true to continue.\n\n*Note: Code evaluation via the 'Run Code' button will also be mocked during this fallback state.*",
+        language: language,
+        starter_code: "// The AI API is currently unreachable.\n// Write a simple hello world or return true.\n\nfunction solve() {\n    return true;\n}",
+        test_cases: []
+    };
+}
+
+async function evaluateCodeSnippet(problem_statement, language, user_code) {
+    const prompt = `You are an expert AI code evaluator and compiler. Evaluate the following user code submitted for a coding challenge.
+
+PROBLEM STATEMENT:
+${problem_statement}
+
+LANGUAGE: ${language}
+
+USER CODE:
+${user_code}
+
+Task:
+1. Act as a compiler/interpreter. Determine if the code has syntax errors.
+2. Mentally run the code against standard test cases and edge cases implied by the problem. 
+3. Does the code correctly solve the problem?
+4. What is the time and space complexity?
+5. Provide actionable feedback.
+
+Return ONLY this exact JSON, no markdown, no explanation:
+{
+  "passed": true/false,
+  "feedback": "Detailed feedback explaining what failed or what was good...",
+  "time_complexity": "O(N)",
+  "space_complexity": "O(1)"
+}`;
+
+    const result = await callAI(prompt, 1);
+    if (result && typeof result.passed === 'boolean') return result;
+
+    // When AI is unreachable, apply a simple static mock evaluation
+    const lcCode = user_code.toLowerCase();
+    const isMockPass = lcCode.includes('return true') || lcCode.includes('hello world');
+    
+    if (isMockPass) {
+        return {
+             _fallback: true,
+             passed: true,
+             feedback: "You successfully completed the fallback challenge. Great job returning true or writing hello world! Your progress has been saved.",
+             time_complexity: "O(1)",
+             space_complexity: "O(1)"
+        };
+    }
+    
+    return {
+        _fallback: true,
+        passed: false,
+        feedback: "Could not evaluate custom logic due to AI service unavailability. To pass this fallback challenge, simply write `return true;` or `console.log('Hello World');`.",
+        time_complexity: "Unknown",
+        space_complexity: "Unknown"
+    };
 }
 
 module.exports = {
@@ -689,4 +793,8 @@ module.exports = {
     analyzeConfidence,
     generateFollowUp,
     generateNextQuestion,
+    generateCourse,
+    generateMCQs,
+    generateCodingChallenge,
+    evaluateCodeSnippet
 };
