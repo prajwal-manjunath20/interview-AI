@@ -1,16 +1,54 @@
-# React + Vite
+# AI Interview Coach
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An AI-powered interview preparation platform designed to help candidates practice, refine, and master technical and behavioral interviews. 
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Hybrid AI Architecture**: Utilizes Gemini and HuggingFace for intelligent parsing, alongside robust offline fallback engines and PostgreSQL caching to ensure high performance and lower API costs.
+- **Role-Specific Coaching**: Tailored interview questions and evaluation criteria across multiple disciplines (Software Engineer, Product Manager, Data Scientist, etc).
+- **Nuanced Feedback Matrix**: Answers are evaluated on Relevance, Clarity, Depth, Structure, and Confidence rather than simple word counts.
+- **Secure Authentication**: Fully fledged JWT email-only authentication flow.
+- **Full Stack Setup**: 
+  - **Frontend**: React + Vite + TailwindCSS.
+  - **Backend**: Node.js + Express.
+  - **Database**: PostgreSQL.
+  
+## Getting Started
 
-## React Compiler
+### Prerequisites
+- Node.js (v18+ recommended)
+- PostgreSQL
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Installation
 
-## Expanding the ESLint configuration
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/prajwal-manjunath20/interview-AI.git
+   cd ai-interview-coach
+   ```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+2. **Setup the Backend**
+   ```bash
+   cd server
+   npm install
+   # Copy the environment example and populate your secrets, database URLs, and API keys
+   cp .env.example .env
+   # Start the backend server
+   npm run dev
+   ```
+
+3. **Setup the Frontend**
+   ```bash
+   # From the root directory
+   npm install
+   # Start the frontend Vite server
+   npm run dev
+   ```
+
+## Tech Stack
+- Frontend: React 19, Vite, Tailwind CSS, Recharts
+- Backend: Express, Node.js, PG, Zod
+- AI Integrations: Gemini API, HuggingFace Inference API
+
+## License
+MIT
