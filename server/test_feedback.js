@@ -1,4 +1,4 @@
-﻿const ai = require('./server/services/aiService');
+const ai = require('./services/aiService');
 async function test() {
   const q = 'Design a URL shortening service like bit.ly. Walk me through your architecture.';
   const weakA = 'I would do it by thinking about the problem and maybe using some tools to fix it, kind of like what I have done before.';

@@ -76,7 +76,7 @@ async function startSession(req, res) {
 }
 
 async function evaluateAnswer(req, res) {
-    const { sessionId, question, answer, questionIndex, currentDifficulty } = evaluateSchema.parse(req.body);
+    const { sessionId, question, answer, questionIndex } = evaluateSchema.parse(req.body);
 
     // Run all AI analyses in parallel
     const isBeh = isBehavioral(question);
@@ -141,7 +141,7 @@ async function generateFollowUp(req, res) {
 }
 
 async function nextQuestion(req, res) {
-    const { sessionId, role, difficulty, prevQuestion, prevAnswer, score } = nextSchema.parse(req.body);
+    const { role, difficulty, prevQuestion, prevAnswer, score } = nextSchema.parse(req.body);
     const nextDiff = getNextDifficulty(score, difficulty);
     
     // Check cached question bank first to avoid AI call

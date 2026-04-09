@@ -3,6 +3,37 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { interview as interviewApi } from '../services/api';
 import ScoreBar from '../components/ScoreBar';
 
+function parseFeedbackSections(feedback) {
+    const text = String(feedback || '').trim();
+    if (!text) {
+        return { strengths: [], improvements: [], summary: '' };
+    }
+
+    const strengthsMatch = text.match(/Observed strengths:\s*(.*?)(?=\.\s+Recommended improvement:|$)/i);
+    const improvementMatch = text.match(/Recommended improvement:\s*(.*?)(?=\.$|$)/i);
+
+    const strengths = strengthsMatch?.[1]
+        ? strengthsMatch[1].split(',').map((item) => item.trim()).filter(Boolean)
+        : [];
+
+    const improvements = improvementMatch?.[1]
+        ? improvementMatch[1]
+            .split(/Also,\s*/i)
+            .map((item) => item.trim().replace(/\.$/, ''))
+            .filter(Boolean)
+        : [];
+
+    const summary = text
+        .replace(/Observed strengths:\s*.*?(?=\.\s+Recommended improvement:|$)/i, '')
+        .replace(/Recommended improvement:\s*.*?(?=\.$|$)/i, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^\./, '')
+        .trim();
+
+    return { strengths, improvements, summary };
+}
+
 export default function FeedbackPage() {
     const location = useLocation();
     const navigate = useNavigate();
@@ -16,6 +47,7 @@ export default function FeedbackPage() {
     const score = evaluation ? Math.round(((evaluation.relevance + evaluation.clarity + evaluation.depth) / 3) * 10) / 10 : 0;
     const scoreColor = score >= 7 ? '#2A9D8F' : score >= 4 ? '#F4A261' : '#E63946';
     const scoreLabel = score >= 7 ? 'Strong answer' : score >= 4 ? 'Good effort' : 'Needs improvement';
+    const feedbackSections = parseFeedbackSections(evaluation?.feedback);
 
     const handleNext = async () => {
         if (isLast) { navigate('/summary', { state: { sessionId, role, difficulty } }); return; }
@@ -101,7 +133,36 @@ export default function FeedbackPage() {
                 {tab === 'feedback' && (
                     <>
                         <h3 style={{ margin: '0 0 16px', fontSize: 16, color: 'var(--text)' }}>Detailed Feedback</h3>
-                        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: '#374151' }}>{evaluation.feedback}</p>
+                        {feedbackSections.summary && (
+                            <p style={{ margin: '0 0 16px', fontSize: 15, lineHeight: 1.75, color: '#374151' }}>{feedbackSections.summary}</p>
+                        )}
+
+                        {feedbackSections.strengths.length > 0 && (
+                            <div style={{ marginBottom: 16 }}>
+                                <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary)', margin: '0 0 8px' }}>What Went Well</p>
+                                {feedbackSections.strengths.map((item, index) => (
+                                    <p key={index} style={{ margin: '0 0 6px', fontSize: 14, color: '#374151', paddingLeft: 12, borderLeft: '2px solid var(--primary)' }}>
+                                        {item}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
+
+                        {feedbackSections.improvements.length > 0 && (
+                            <div style={{ marginBottom: 4 }}>
+                                <p style={{ fontSize: 13, fontWeight: 700, color: '#B45309', margin: '0 0 8px' }}>What To Improve</p>
+                                {feedbackSections.improvements.map((item, index) => (
+                                    <p key={index} style={{ margin: '0 0 6px', fontSize: 14, color: '#374151', paddingLeft: 12, borderLeft: '2px solid #F59E0B' }}>
+                                        {item}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
+
+                        {!feedbackSections.summary && feedbackSections.strengths.length === 0 && feedbackSections.improvements.length === 0 && (
+                            <p style={{ margin: 0, fontSize: 15, lineHeight: 1.75, color: '#374151' }}>{evaluation.feedback}</p>
+                        )}
+
                         {followUp && (
                             <div style={{ marginTop: 20, padding: 16, background: 'var(--secondary-light)', borderRadius: 10, border: '1px solid #fde8c8' }}>
                                 <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: '#92400e', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Follow-up Question</p>

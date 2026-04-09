@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import api from '../services/api';
 import ReactMarkdown from 'react-markdown';
 import CodeMirror from '@uiw/react-codemirror';
@@ -10,7 +10,6 @@ import { BookOpen, FileQuestion, Code, CheckCircle, ChevronRight, Play } from 'l
 
 export default function CoursePlayerPage() {
     const { id } = useParams();
-    const navigate = useNavigate();
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState({ type: 'material', id: 0 }); // type: material, quiz, challenge
@@ -36,7 +35,7 @@ export default function CoursePlayerPage() {
     if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading course...</div>;
     if (!data) return <div style={{ padding: 40, textAlign: 'center' }}>Course not found</div>;
 
-    const { course, materials, mcqs, challenges, progress } = data;
+    const { course, materials, mcqs, challenges } = data;
 
     // Component for Markdown Material
     const MaterialView = ({ material }) => (
