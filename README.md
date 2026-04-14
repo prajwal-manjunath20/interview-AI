@@ -1,17 +1,18 @@
-# AI Interview Coach
+# 🚀 AI Interview Coach
 
-An AI-powered interview preparation platform designed to help candidates practice, refine, and master technical and behavioral interviews. 
+An AI-powered interview preparation platform designed to help candidates practice, refine, and master technical and behavioral interviews.
+
+### 🌐 Live Demo
+*   **Web Portal:** [https://interview-ai-lovat-one.vercel.app](https://interview-ai-lovat-one.vercel.app)
+*   **API Health:** [https://interview-ai-g6fw.onrender.com/api/health](https://interview-ai-g6fw.onrender.com/api/health)
 
 ## Features
 
-- **Hybrid AI Architecture**: Utilizes Gemini and HuggingFace for intelligent parsing, alongside robust offline fallback engines and PostgreSQL caching to ensure high performance and lower API costs.
-- **Role-Specific Coaching**: Tailored interview questions and evaluation criteria across multiple disciplines (Software Engineer, Product Manager, Data Scientist, etc).
-- **Nuanced Feedback Matrix**: Answers are evaluated on Relevance, Clarity, Depth, Structure, and Confidence rather than simple word counts.
+- **Hybrid AI Architecture**: Utilizes Gemini and HuggingFace for intelligent parsing, alongside robust offline fallback engines and PostgreSQL caching.
+- **Role-Specific Coaching**: Tailored interview questions across multiple disciplines (Software Engineer, Product Manager, Data Scientist, etc).
+- **Nuanced Feedback Matrix**: Answers are evaluated on Relevance, Clarity, Depth, Structure, and Confidence.
 - **Secure Authentication**: Fully fledged JWT email-only authentication flow.
-- **Full Stack Setup**: 
-  - **Frontend**: React + Vite + TailwindCSS.
-  - **Backend**: Node.js + Express.
-  - **Database**: PostgreSQL.
+- **Dynamic Session Handling**: Real-time progress tracking and performance analytics.
   
 ## Getting Started
 
