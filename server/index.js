@@ -19,7 +19,17 @@ const PORT = process.env.PORT || 3001;
 // Security & parsing
 app.use(helmet());
 app.use(cors({
-    origin: /^http:\/\/localhost:\d+$/,
+    origin: (origin, callback) => {
+        const allowedOrigins = [
+            /^http:\/\/localhost:\d+$/,
+            process.env.FRONTEND_URL,
+        ].filter(Boolean);
+        if (!origin || allowedOrigins.some(o => (o instanceof RegExp ? o.test(origin) : o === origin))) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
 }));
 app.use(express.json({ limit: '10kb' }));
